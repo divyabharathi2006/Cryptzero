@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRYPTZERO Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body class="admin-body">
+    <div class="admin-shell">
+        <h1>CRYPTZERO Admin Dashboard</h1>
+        <div class="admin-grid">
+            <div class="card"><strong>Total Jobs</strong><span>{{ jobs | length }}</span></div>
+            <div class="card"><strong>Active Jobs</strong><span>{{ jobs | selectattr('status','equalto','uploaded') | list | length }}</span></div>
+            <div class="card"><strong>Successful</strong><span>{{ jobs | selectattr('status','equalto','completed') | list | length }}</span></div>
+            <div class="card"><strong>Failed</strong><span>{{ jobs | selectattr('status','equalto','failed') | list | length }}</span></div>
+        </div>
+        <div class="capability-list">
+            <h2>Current capabilities</h2>
+            <ul>
+                {% for item in capabilities.formats %}
+                <li>{{ item }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

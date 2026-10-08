@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRYPTZERO</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <div class="page-shell">
+        <header class="topbar">
+            <div class="brand-wrap">
+                <div class="brand-lock">🔐</div>
+                <div>
+                    <div class="brand-name">CRYPTZERO</div>
+                    <div class="brand-tag">Unlock Your Files. Securely. Privately.</div>
+                </div>
+            </div>
+        </header>
+
+        <main class="hero">
+            <section class="upload-panel">
+                <h1>Universal File Unlocker</h1>
+                <p>Upload encrypted files and let CRYPTZERO detect the format, verify the credentials, and unlock the archive securely.</p>
+
+                <form id="uploadForm">
+                    <div class="dropzone" id="dropzone">
+                        <input type="file" id="fileInput" name="file" accept=".zip,.rar" hidden>
+                        <div class="dropzone-inner">
+                            <span class="upload-icon">🔐</span>
+                            <div>DROP FILE HERE</div>
+                            <div class="or">or</div>
+                            <button type="button" class="choose-btn" id="chooseFileBtn">CHOOSE FILE</button>
+                        </div>
+                    </div>
+                    <button type="submit" class="primary-btn">ANALYZE FILE</button>
+                </form>
+
+                <div class="status-box" id="statusBox">
+                    Supported: ZIP • RAR • 7Z • PDF • OFFICE • GPG • AGE
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRYPTZERO Recovery</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #0b1220; color: #e5ecff; margin: 0; padding: 20px; }
+        .wrap { max-width: 1200px; margin: 0 auto; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
+        .card { background: #121d2d; border: 1px solid #22314a; border-radius: 14px; padding: 20px; box-shadow: 0 12px 30px rgba(0,0,0,0.2); }
+        h1, h2, h3 { margin-top: 0; }
+        input, select, button { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid #364c70; background: #0d1726; color: #edf3ff; margin-top: 10px; }
+        button { background: #1b6ef3; cursor: pointer; }
+        button.secondary { background: #22314a; }
+        .status { color: #7fe7b2; }
+        .danger { color: #ff8b8b; }
+        pre { white-space: pre-wrap; background: #08121d; padding: 12px; border-radius: 10px; }
+        .small { font-size: 12px; opacity: 0.8; }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <h1>CRYPTZERO Archive Recovery & Unlocker</h1>
+        <p class="small">Local-first, authorized archive recovery utility. Passwords are never sent externally.</p>
+
+        <div class="grid">
+            <div class="card">
+                <h3>Upload Archive</h3>
+                <input id="archiveFile" type="file" accept=".zip,.rar">
+                <button id="uploadBtn">Upload Archive</button>
+                <pre id="uploadResult">Waiting for upload…</pre>
+            </div>
+            <div class="card">
+                <h3>Recovery</h3>
+                <select id="recoveryMethod">
+                    <option value="wordlist">Custom Password List</option>
+                    <option value="rule">Rule-Based Candidate Generation</option>
+                </select>
+                <input id="wordlistPath" placeholder="Wordlist path (optional)">
+                <input id="baseWords" placeholder="Base words (one per line)">
+                <button id="startRecoveryBtn">Start Recovery</button>
+                <button id="verifyBtn" class="secondary">Verify Password</button>
+                <pre id="jobStatus">No job started.</pre>
+            </div>
+            <div class="card">
+                <h3>Results</h3>
+                <input id="candidatePassword" placeholder="Password to verify">
+                <button id="extractBtn" class="secondary">Extract ZIP</button>
+                <pre id="resultBox">No result yet.</pre>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const uploadBtn = document.getElementById('uploadBtn');
+        const startRecoveryBtn = document.getElementById('startRecoveryBtn');
+        const verifyBtn = document.getElementById('verifyBtn');
+        const extractBtn = document.getElementById('extractBtn');
+        const uploadResult = document.getElementById('uploadResult');
+        const jobStatus = document.getElementById('jobStatus');
+        const resultBox = document.getElementById('resultBox');
+        let currentArchiveId = null;
+        let currentJobId = null;
+        let recoveryPoller = null;
+
+        function renderJson(target, payload) {
+            target.textContent = JSON.stringify(payload, null, 2);
+        }
+
+        function stopPolling() {
+            if (recoveryPoller) {
+                clearInterval(recoveryPoller);
+                recoveryPoller = null;
+            }
+        }
+
+        function pollRecoveryStatus() {
+            if (!currentJobId) {
+                return;
+            }
+
+            stopPolling();
+            recoveryPoller = setInterval(async () => {
+                try {
+                    const response = await fetch(`/api/recovery/${currentJobId}/status`, {
+                        method: 'GET',
+                        credentials: 'same-origin'
+                    });
+                    const json = await response.json();
+                    if (!json.success) {
+                        renderJson(jobStatus, json);
+                        stopPolling();
+                        return;
+                    }
+
+                    const job = json.job || {};
+                    renderJson(jobStatus, job);
+
+                    if (job.status === 'recovered' && job.password) {
+                        document.getElementById('candidatePassword').value = job.password;
+                        renderJson(resultBox, {
+                            success: true,
+                            password: job.password,
+                            status: job.status,
+                            message: 'Recovered password found.'
+                        });
+                        stopPolling();
+                        return;
+                    }
+
+                    if (job.status === 'failed' || job.status === 'completed' || job.status === 'cancelled') {
+                        renderJson(resultBox, {
+                            success: job.status === 'completed',
+                            status: job.status,
+                            message: job.result || 'Recovery finished.',
+                            details: job
+                        });
+                        stopPolling();
+                    }
+                } catch (error) {
+                    renderJson(jobStatus, { success: false, message: String(error) });
+                    stopPolling();
+                }
+            }, 1000);
+        }
+
+        uploadBtn.addEventListener('click', async () => {
+            const file = document.getElementById('archiveFile').files[0];
+            if (!file) {
+                uploadResult.textContent = 'Please select a ZIP or RAR file.';
+                return;
+            }
+            const formData = new FormData();
+            formData.append('file', file);
+            const response = await fetch('/api/archive/upload', {
+                method: 'POST',
+                body: formData,
+                credentials: 'same-origin'
+            });
+            const json = await response.json();
+            if (!json.success) {
+                uploadResult.textContent = JSON.stringify(json, null, 2);
+                return;
+            }
+            currentArchiveId = json.archive_id;
+            uploadResult.textContent = JSON.stringify(json, null, 2);
+        });
+
+        startRecoveryBtn.addEventListener('click', async () => {
+            if (!currentArchiveId) {
+                jobStatus.textContent = 'Upload an archive first.';
+                return;
+            }
+            const method = document.getElementById('recoveryMethod').value;
+            const payload = {
+                archive_id: currentArchiveId,
+                method,
+                options: {
+                    wordlist_path: document.getElementById('wordlistPath').value || '',
+                    base_words: document.getElementById('baseWords').value || ''
+                }
+            };
+            const response = await fetch('/api/recovery/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+                credentials: 'same-origin'
+            });
+            const json = await response.json();
+            currentJobId = json.job_id;
+            renderJson(jobStatus, json);
+            if (json.success && currentJobId) {
+                pollRecoveryStatus();
+            }
+        });
+
+        verifyBtn.addEventListener('click', async () => {
+            const candidate = document.getElementById('candidatePassword').value;
+            if (!currentJobId) {
+                resultBox.textContent = 'Submit a valid job first.';
+                return;
+            }
+            if (!candidate) {
+                const response = await fetch(`/api/recovery/${currentJobId}/status`, {
+                    method: 'GET',
+                    credentials: 'same-origin'
+                });
+                const json = await response.json();
+                if (json.success && json.job && json.job.password) {
+                    document.getElementById('candidatePassword').value = json.job.password;
+                }
+                renderJson(resultBox, json);
+                return;
+            }
+            const response = await fetch(`/api/recovery/${currentJobId}/verify`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ candidate }),
+                credentials: 'same-origin'
+            });
+            const json = await response.json();
+            renderJson(resultBox, json);
+        });
+
+        extractBtn.addEventListener('click', async () => {
+            if (!currentArchiveId) {
+                resultBox.textContent = 'Upload an archive first.';
+                return;
+            }
+            const password = document.getElementById('candidatePassword').value;
+            const response = await fetch(`/api/archive/${currentArchiveId}/extract`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password }),
+                credentials: 'same-origin'
+            });
+            const json = await response.json();
+            resultBox.textContent = JSON.stringify(json, null, 2);
+        });
+    </script>
+</body>
+</html>
